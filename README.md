@@ -1,280 +1,153 @@
-# The Hidden Cost of Imaging Fragmentation
-## A Workflow and Data Analysis of SaaS Imaging Platform Efficiency in Healthcare
+# Imaging Retrieval Operations
 
-> Based on real clinical operations experience managing imaging and medical records retrieval across multiple SaaS platforms in a health tech environment.
+## A Workflow and Data Analysis of Diagnostic Imaging Retrieval Operations
 
----
-
-## Project Background
-
-This project was not an academic exercise. It was built from direct operational experience retrieving medical records and imaging diagnostics across multiple SaaS imaging platforms — Ambra, PowerShare (Microsoft), LifeImage, and Nucleus — in a health tech environment supporting specialist second opinion consultations.
-
-The central question this project explores is not whether SaaS imaging platforms work — they do. The question is whether healthcare organizations are getting sufficient operational value to justify the cost and complexity of managing multiple vendors, and what happens when platform coverage breaks down.
+> Based on real healthcare operations experience managing diagnostic imaging retrieval across SaaS imaging platforms and physical-media workflows.
 
 ---
 
-## The Problem
+# README Update — Project Evolution & Roadmap
 
-Electronic Health Records exist. Imaging platforms exist. Yet in practice, retrieving imaging diagnostics remains one of the most manually intensive, time-sensitive, and failure-prone steps in the medical records workflow.
+## Project Evolution
 
-The reason is structural. EHRs are not built to store or render DICOM imaging files natively at scale. SaaS imaging platforms fill that gap — but they introduce their own inefficiencies:
+The project began as a small PostgreSQL prototype exploring the operational differences between SaaS imaging retrieval and physical CD-based retrieval.
 
-- No centralized directory of which facility uses which platform
-- Manual discovery process — staff had to call facilities to confirm platform access
-- Inconsistent documentation of platform-facility relationships in the EHR
-- No fallback automation when a platform was not available
+The original model focused primarily on retrieval method, turnaround time, platform coverage, and delays across a small synthetic dataset.
 
-When platform coverage failed, the fallback was physical — FedEx Express shipping of CDs, with no guarantee the facility would use the prepaid label instead of USPS, adding days of uncontrolled delay to an already time-sensitive case.
+As the project developed, the original schema revealed an important limitation: imaging retrieval is not simply a comparison between SaaS and physical media. A single case may require imaging from multiple healthcare facilities, each facility may support multiple imaging platforms, and each imaging request may progress through a different retrieval pathway.
 
-Cases had a **5-day target turnaround timeframe** — imaging and records were expected within 5 days of case opening to support specialist consultations. This timeframe made SaaS platforms not a preference but an operational necessity.
+The project has therefore been redesigned as a broader **Imaging Retrieval Operations** case study.
 
----
+The revised project uses MySQL and is being expanded into a 12-month synthetic operational dataset representing approximately **50,000 cases, 75,000–85,000 imaging requests, 400 healthcare facilities, and six synthetic SaaS imaging platforms**.
 
-## The Workflow
-
-```
-Case opened — imaging needed
-        ↓
-Call imaging department to request diagnostics
-        ↓
-Confirm which platform the facility uses
-        ↓
-Check if organization has access to that platform
-        ↓
-Platform available → digital retrieval → fast
-        ↓
-Platform NOT available → generate FedEx Express label
-        ↓
-Ship label to facility → wait → hope they use Express not USPS
-        ↓
-CD arrives → process → case moves forward
-        ↓
-OR facility uses USPS → uncontrolled delay → case at risk
-```
-
-For cases involving multiple facilities — patients seen at different health systems — this process ran in parallel across each facility, each potentially using a different platform or requiring a CD. One case could simultaneously be in digital retrieval, CD transit, and active follow-up status, making timeline prediction nearly impossible without centralized tracking.
+The redesigned model focuses on request-level workflow, facility-platform relationships, retrieval-event history, physical shipment activity, operational workload, and process variation.
 
 ---
 
-## Key Operational Context
+## Data Source
 
-**The 5-Day Turnaround Constraint**
+This project was built from direct healthcare operations experience managing diagnostic imaging retrieval across external healthcare facilities.
 
-The 5-day target turnaround timeframe was achievable for single-facility cases with documented SaaS access. It became increasingly unrealistic as case complexity grew. Multiple facilities, undocumented platforms, or CD-only facilities each added uncontrollable variables that pushed timelines beyond the expected timeframe regardless of operational efficiency.
+The dataset is fully synthetic, but the workflow structure, terminology, operational rules, and data-model requirements were informed by patterns observed firsthand while working in health information operations.
 
-A more realistic operational framework would be:
+No patient records, proprietary organizational data, historical case data, or real facility performance metrics are used in the project.
 
-- Single facility + documented SaaS → 5 days reasonable
-- Multi-facility or CD-only → 10-15 days more appropriate
-- Unknown platform status → discovery call adds minimum 1-2 days before retrieval even begins
+The synthetic dataset is designed to reproduce the **structure and complexity of the workflow**, not the historical performance of any specific organization.
 
 ---
 
 ## Database Design
 
-To quantify these inefficiencies, I designed a relational PostgreSQL database modeling the imaging retrieval workflow with the following tables:
+The redesigned relational model centers on the individual imaging request.
 
-- `cases` — individual patient cases requiring imaging
-- `facilities` — medical facilities where imaging was performed, including documented platform and contact information
-- `imaging_platforms` — available platforms and their type (SaaS or physical)
-- `imaging_requests` — each retrieval request per case per facility, including department contacted and whether platform was known at time of request
-- `retrieval_log` — actual retrieval method used, dates, turnaround time, delay reason, and status
+A patient may be associated with multiple cases, and each case may contain multiple imaging requests when imaging is required from more than one healthcare facility.
 
-A `consultation_date` field was added to `cases` mid-project after recognizing the original model could measure turnaround time but not patient impact. See Known Limitations section for full context.
+Facilities may support zero, one, or multiple SaaS imaging platforms. Because platforms may also be associated with multiple facilities, facility-to-platform coverage is modeled as a many-to-many relationship.
 
----
+The database includes:
 
-## Queries & Findings
+- `patients` — synthetic patient identifiers used to preserve patient-to-case relationships
+- `cases` — individual cases associated with synthetic patients
+- `facilities` — healthcare facilities holding requested imaging
+- `imaging_platforms` — synthetic SaaS imaging platforms
+- `facility_platforms` — documented facility-to-platform relationships
+- `imaging_requests` — individual facility-level imaging retrieval requests
+- `imaging_retrieval_events` — operational event history for each request
+- `physical_shipments` — shipment activity associated with physical-media retrieval
 
----
-
-### Query 1 — SaaS vs CD Turnaround Time
-
-**Business question:** What is the average turnaround time for SaaS retrieval compared to CD retrieval?
-
-**Reasoning:** This is the anchor finding. Everything else in the project builds on this number. If SaaS is meaningfully faster than CD, platform coverage gaps have a quantifiable operational cost.
-
-```sql
-SELECT retrieval_method,
-ROUND(AVG(date_received - date_requested), 1) AS average_turnaround
-FROM retrieval_log
-WHERE date_received IS NOT NULL
-GROUP BY retrieval_method;
-```
-
-**Results:** SaaS platform retrieval averaged **1 day** turnaround while CD retrieval averaged **21 days** — a 20x difference in case processing speed. Given the 5-day target turnaround timeframe for consultations, CD-based workflows consistently exceeded expected timelines. This single finding quantifies the operational necessity of SaaS imaging platform access.
+Patient demographics and other identifying information are intentionally excluded because they are not required for the operational analysis.
 
 ---
 
-### Query 2 — Retrieval Method Volume
+## Tools
 
-**Business question:** Which retrieval method is used most frequently — and if SaaS is faster, why is CD still significant?
-
-**Reasoning:** Knowing SaaS is faster doesn't explain why CD is still being used. Volume by method reveals whether platform coverage is sufficient to support the majority of cases.
-
-```sql
-SELECT retrieval_method,
-COUNT(request_id) AS total_requests
-FROM retrieval_log
-GROUP BY retrieval_method;
-```
-
-**Results:** SaaS retrieval accounted for the majority of requests but by a narrower margin than expected — reflecting incomplete platform coverage across facilities. With only 6 of 10 facilities having documented SaaS platform access, CD retrieval remained a significant operational burden. This finding reinforces that the value of SaaS platforms is directly limited by coverage gaps.
+- MySQL
+- MySQL Workbench
+- Python
+- VS Code
+- Git
+- GitHub
+- Tableau *(planned)*
 
 ---
 
-### Query 3 — Facilities With No Documented Platform
+## Project Plan
 
-**Business question:** Which facilities had no SaaS platform documented and were therefore forced to CD retrieval?
+The redesigned project extends beyond a simple retrieval-method comparison into a broader operational workflow and data analysis case study.
 
-**Reasoning:** Before assuming undocumented facilities drive all CD volume, the data needs to confirm which facilities had no platform on record. This led directly to Query 4, which tested whether documented platforms were actually being used.
+Planned development includes:
 
-```sql
-SELECT facility_name,
-CASE WHEN platform_id IS NULL THEN 'No' ELSE 'Yes' END AS saas_documented
-FROM facilities
-WHERE platform_id IS NULL;
-```
-
-**Results:** 4 out of 10 facilities (40%) had no SaaS imaging platform documented in the facility knowledge base. Every imaging request routed to these facilities defaulted to physical CD retrieval — averaging 21 days turnaround compared to 1 day for SaaS. However, undocumented facilities are not the only source of CD volume — documented platforms do not guarantee digital retrieval.
-
----
-
-### Query 4 — Documentation Failure
-
-**Business question:** Of the facilities with a documented SaaS platform, did any still result in CD retrieval?
-
-**Reasoning:** Platform documentation does not guarantee platform use. A facility could have Ambra documented but still ship a CD due to staff training gaps, expired access, or operational habit. Assuming documented = used would overstate actual SaaS coverage.
-
-```sql
-SELECT f.facility_name, p.platform_name, r.retrieval_method
-FROM facilities f
-JOIN imaging_platforms p ON p.platform_id = f.platform_id
-JOIN imaging_requests i ON i.facility_id = f.facility_id
-JOIN retrieval_log r ON r.request_id = i.request_id
-WHERE r.retrieval_method = 'CD' AND f.platform_id IS NOT NULL;
-```
-
-**Results:** One facility had a SaaS platform documented but still defaulted to CD retrieval. This reveals that platform documentation alone does not guarantee digital retrieval — operational adoption at the facility level is a separate challenge. A documented platform that goes unused provides no turnaround time benefit and creates a false sense of coverage in the knowledge base.
+- synthetic generation of 12 months of imaging retrieval operations
+- relational and data-quality validation
+- analysis of facility-level retrieval workload
+- SaaS platform coverage and utilization analysis
+- physical-media retrieval and shipment analysis
+- retrieval-event and follow-up workload analysis
+- identification of operational outliers and workflow friction
+- dashboard development for retrieval operations and KPI monitoring
+- scenario analysis of potential workflow and platform-coverage changes
 
 ---
 
-### Query 5 — USPS Shipping Failures
+## Phase 2 — Synthetic Operations Modeling & Analysis
 
-**Business question:** Of the CD retrievals, how many were delayed because the facility used USPS instead of FedEx Express?
+The original SQL analysis raised broader questions about how imaging retrieval behaves across facilities, platforms, cases, and retrieval pathways.
 
-**Reasoning:** CD retrieval already adds significant delay. When facilities ignored the prepaid FedEx Express label and used USPS instead, that delay became uncontrollable — the operational team had done everything correctly but had no enforcement mechanism.
+Phase 2 rebuilds the project around a more realistic relational model and a substantially larger synthetic operational environment.
 
-```sql
-SELECT retrieval_method, delay_reason,
-COUNT(request_id) AS total_delayed_requests
-FROM retrieval_log
-WHERE retrieval_method = 'CD' AND delay_reason = 'USPS instead of FedEx'
-GROUP BY retrieval_method, delay_reason;
-```
+Python is being used to generate reproducible synthetic data representing patients, cases, healthcare facilities, facility-platform relationships, imaging requests, retrieval events, and physical shipments.
 
-**Results:** 5 CD retrieval cases were delayed due to facilities using USPS instead of the prepaid FedEx Express label. These cases experienced the longest turnaround times and represent the highest risk to consultation deadlines — delays caused entirely by factors outside operational control.
+The resulting dataset will then be loaded into MySQL for validation and exploratory operational analysis.
+
+Because the dataset is synthetic, the project distinguishes between **modeled assumptions and analytical findings**. Relationships explicitly created by the data-generation logic are treated as validation targets rather than empirical discoveries. Exploratory analysis focuses on patterns that emerge from interactions among multiple modeled operational variables.
+
+Results describe the behavior of the synthetic system and should not be interpreted as real-world healthcare performance benchmarks.
 
 ---
 
-## Known Limitations & Model Extension
+### Phase 2 Deliverables
 
-While building this analysis a critical gap emerged: turnaround time tells you how long retrieval took — but not whether that delay actually impacted the patient. To answer that, the data model needed to know when the specialist consultation was scheduled.
-
-A `consultation_date` field was added to the `cases` table to capture the 5-day turnaround deadline:
-
-```sql
-ALTER TABLE cases ADD COLUMN consultation_date DATE;
-UPDATE cases SET consultation_date = date_opened + INTERVAL '5 days';
-```
-
-This extension enabled the analysis to connect operational delays directly to patient care impact — transforming a workflow analysis into a patient outcome analysis.
-
-Additionally the 5-day turnaround metric itself was identified as a structural limitation. The expected turnaround time assumed ideal conditions — single facility, documented platform, responsive staff. Real cases introduced variables outside operational control that made the turnaround time unrealistic for complex multi-facility cases regardless of retrieval method.
-
----
-
-### Query 6 — Consultation Deadline Misses
-
-**Business question:** How many cases missed their 5-day consultation deadline because imaging arrived late or never arrived?
-
-**Reasoning:** Turnaround time differences between retrieval methods are meaningless without understanding their direct impact on patient care. The consultation deadline is the operational turnaround time — if imaging doesn't arrive before the specialist sees the patient, the consultation is compromised.
-
-```sql
-SELECT COUNT(*) AS cases_missed_deadline
-FROM cases c
-JOIN imaging_requests i ON i.case_id = c.case_id
-JOIN retrieval_log r ON r.request_id = i.request_id
-WHERE r.date_received > c.consultation_date
-OR r.date_received IS NULL;
-```
-
-> **Analytical note:** Initial approach attempted to combine COUNT, CASE WHEN, and GROUP BY in a single query. Simplified to a direct COUNT with WHERE filter after recognizing the complexity was unnecessary. In analytics, the simplest query that answers the question is always preferable.
-
-**Results:** 15 cases missed their consultation deadline — either receiving imaging after the consultation date or never receiving it at all. This number requires time context to be meaningful, which led to the next query.
+- Imaging retrieval workflow SOP
+- Business rules
+- Synthetic data specification
+- Revised relational data model
+- MySQL database schema
+- Python synthetic-data generator
+- 12-month synthetic operational dataset
+- Data-quality and relational validation
+- SQL operational analysis
+- Retrieval operations dashboard
+- Scenario and sensitivity analysis
 
 ---
 
-### Query 7 — Monthly Deadline Miss Trend
+## Project Documentation
 
-**Business question:** How are missed consultation deadlines distributed across months — and is there a trend over time?
+Supporting project documentation is maintained in the `docs/` directory:
 
-**Reasoning:** A total count of missed deadlines without time context is incomplete. Monthly distribution reveals whether performance was stable, improving, or deteriorating — and whether any single period drove disproportionate failures.
-
-```sql
-SELECT TO_CHAR(DATE_TRUNC('month', c.date_opened), 'Month YYYY') AS month,
-COUNT(*) AS cases_missed_deadline
-FROM cases c
-JOIN imaging_requests i ON i.case_id = c.case_id
-JOIN retrieval_log r ON r.request_id = i.request_id
-WHERE r.date_received > c.consultation_date
-OR r.date_received IS NULL
-GROUP BY DATE_TRUNC('month', c.date_opened)
-ORDER BY month ASC;
-```
-
-**Results:** Missed deadlines were distributed at 3-5 cases per month across the analysis period. This analysis is based on a synthetic dataset of 30 cases. In actual operations, case volume ran approximately 20 cases per week — roughly 80 per month. At that volume, 3-5 missed deadlines per month represents a **4-6% miss rate**, which falls within acceptable operational thresholds. However the distribution of those misses by retrieval method determines whether the root cause is addressable.
+- `imaging-retrieval-operations_sop.md` — modeled imaging retrieval workflow and scope
+- `business-rules.md` — operational rules governing the modeled workflow
+- `data-model.md` — relational entities and relationships
+- `synthetic-data-specification.md` — assumptions governing synthetic data generation
 
 ---
 
-### Query 8 — Missed Deadlines by Retrieval Method
+## Current Status
 
-**Business question:** Of the cases that missed their consultation deadline, how many were CD retrievals vs SaaS retrievals?
+The relational schema has been redesigned and implemented in MySQL.
 
-**Reasoning:** If missed deadlines cluster in one retrieval method, the root cause is identifiable and addressable. This is the most important question in the entire analysis.
+Synthetic data generation is currently in progress using Python. Initial generation includes:
 
-```sql
-SELECT COUNT(c.case_id) AS total_missed,
-SUM(CASE WHEN r.retrieval_method = 'CD' THEN 1 ELSE 0 END) AS cd_cases,
-SUM(CASE WHEN r.retrieval_method = 'SaaS' THEN 1 ELSE 0 END) AS saas_cases
-FROM cases c
-JOIN imaging_requests i ON i.case_id = c.case_id
-JOIN retrieval_log r ON r.request_id = i.request_id
-WHERE r.date_received > c.consultation_date
-OR r.date_received IS NULL;
-```
+- 6 synthetic SaaS imaging platforms
+- 400 synthetic healthcare facilities
+- 44,754 synthetic patients
+- 50,000 synthetic cases
+- facility-to-platform relationships
 
-**Results:** All 15 missed consultation deadlines were CD retrieval cases. **SaaS retrieval had a 0% deadline miss rate.** Every missed deadline was directly attributable to CD retrieval, which averaged 21 days against a 5-day expected turnaround time. This finding makes the operational case for SaaS platform investment unambiguous.
+The next stage will generate imaging requests, retrieval events, and physical shipment activity before the dataset is validated and loaded for SQL analysis.
 
 ---
-
-## Conclusion
-
-SaaS imaging platforms were not a preference — they were an operational necessity. The data demonstrates this across every dimension analyzed:
-
-- **20x faster turnaround** — 1 day SaaS vs 21 days CD
-- **40% of facilities** had no documented platform, forcing CD fallback
-- **Documentation is not adoption** — one facility with a documented platform still defaulted to CD
-- **Uncontrollable delays** — 5 cases delayed by facilities ignoring FedEx Express labels
-- **100% of missed consultation deadlines** were CD cases — SaaS had a perfect record
-
-The recommendation is clear: expanding SaaS platform coverage and ensuring operational adoption at the facility level is the single highest-impact intervention available to reduce imaging retrieval delays and protect consultation deadlines.
-
----
-
-## Tools Used
-- PostgreSQL v15
-- DB Fiddle
 
 ## Live Database
-[View the full schema and queries on DB Fiddle](#)
+
+A public database environment and completed analytical queries will be added after synthetic data generation and validation are complete.

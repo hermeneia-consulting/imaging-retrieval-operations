@@ -134,3 +134,10 @@ Facility behavior parameters will be randomized within reasonable ranges rather 
 
 These differences are synthetic modeling assumptions intended to create realistic operational variation for analysis.
 
+## Patient-to-Case Distribution
+
+Patients may be associated with more than one case during the synthetic observation period.
+
+The synthetic dataset will use a weighted distribution in which most patients are associated with one case, while a smaller proportion have two or three cases.
+
+This distribution is a synthetic modeling assumption used to preserve the one-to-many relationship between patients and cases and should not be interpreted as an observed operational rate.

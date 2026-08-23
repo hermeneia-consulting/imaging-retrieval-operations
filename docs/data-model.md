@@ -64,6 +64,10 @@ A patient may be associated with one or multiple cases.
 
 Patient demographic and clinical attributes are not included unless they become necessary for a defined analytical question.
 
+The synthetic patient table intentionally excludes personally identifying and demographic attributes because patient identity resolution is outside the analytical scope of this project.
+
+In a production imaging retrieval system, additional patient-identification fields would be required to support accurate patient matching and retrieval operations. The simplified synthetic model uses `patient_id` only to preserve the relationship between patients, cases, and imaging requests without modeling protected health information.
+
 ### Cases
 
 Represents an individual case associated with a patient and one or more imaging retrieval requests.
