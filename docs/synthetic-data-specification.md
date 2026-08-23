@@ -27,17 +27,13 @@ Proposed distribution:
 - 10% require imaging from 3 facilities
 - 2% require imaging from 4 facilities
 
-## Facility Volume Distribution
+## Facility Request Distribution
 
-Imaging-request volume is not distributed evenly across facilities. The synthetic dataset will model a concentrated referral pattern in which a relatively small group of facilities accounts for a substantial portion of retrieval activity.
+Imaging-request volume will vary across healthcare facilities rather than being distributed uniformly.
 
-Facilities will be assigned to three synthetic volume tiers:
+When imaging requests are generated, facility selection will use randomized weighting so that some facilities naturally receive more requests than others.
 
-- High-volume facilities: 15% of facilities
-- Medium-volume facilities: 35% of facilities
-- Low-volume facilities: 50% of facilities
-
-Request assignment will be weighted so that high-volume facilities receive substantially more imaging requests than low-volume facilities.
+The resulting request volume for each facility will not be assigned a predefined high-, medium-, or low-volume classification. Facility volume and any subsequent segmentation will instead be derived during SQL analysis from the generated imaging-request data.
 
 ## SaaS Platform Coverage
 
@@ -49,28 +45,6 @@ For the synthetic dataset:
 - 30% have no documented SaaS pathway and primarily rely on physical-media retrieval.
 - SaaS platform coverage is not distributed evenly across the six platforms.
 - Higher-volume facilities are somewhat more likely to have documented SaaS access than lower-volume facilities.
-
-## SaaS Platform Availability
-
-SaaS platform availability will be generated probabilistically rather than assigned to produce a predetermined overall coverage rate.
-
-Facility volume tier will influence the probability that a documented SaaS pathway exists:
-
-- High-volume facilities will have the highest probability of documented SaaS access.
-- Medium-volume facilities will have a moderate probability.
-- Low-volume facilities will have the lowest probability.
-
-Platform availability will still be determined independently for each facility, allowing the final SaaS coverage rate to emerge from the generated dataset rather than being fixed in advance.
-
-## Facility-to-Platform Coverage
-
-A healthcare facility may support zero, one, or multiple SaaS imaging platforms.
-
-Platform coverage will therefore be modeled as a many-to-many relationship between facilities and imaging platforms rather than assigning each facility a single platform.
-
-Among facilities with SaaS availability, the number and combination of supported platforms will vary. Some facilities may support only one platform, while others may support several or potentially all available platforms.
-
-Platform combinations will be generated probabilistically rather than distributed evenly, allowing platform concentration and overlap to emerge in the synthetic dataset.
 
 ## Facility-to-Platform Coverage
 
@@ -104,7 +78,7 @@ Turnaround time will be generated from the retrieval pathway and operational eve
 
 ## Follow-Up Generation
 
-Outstanding imaging requests will generate follow-up activity on a 48-hour cycle until the request is completed or reaches another terminal status.
+Outstanding imaging requests will generate follow-up activity on a 48-hour cycle while the request remains outstanding within the modeled retrieval workflow.
 
 - Follow-up events will occur only while a request remains outstanding.
 - Requests completed before the first 48-hour interval will not generate follow-up activity.
